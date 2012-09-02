@@ -139,6 +139,7 @@ parser.add_option("-p","--playlist",dest="playlist")
 parser.add_option("-i","--program-id",dest="pid")
 parser.add_option("-b","--bandwidth",dest="bandwidth")
 parser.add_option("-s","--scratch",dest="scratch")
+parser.add_option("-t","--token",dest="token")
 parser.add_option("-c","--connections",dest="connections",default=5)
 
 (options, args) = parser.parse_args()
@@ -151,7 +152,12 @@ elif not os.path.isdir(options.scratch):
 if options.playlist is None:
     raise Exception("playlist is a required option")
 
-playlist=curl_cat(options.playlist)
+playlisturl=options.playlist
+if options.token is not None:
+    playlisturl=urljoin(playlisturl,options.token)
+
+
+playlist=curl_cat(playlisturl)
 playlist=parse_extm3u(playlist)
 
 bestbw={}
@@ -189,6 +195,10 @@ for item in playlist:
 if nextlist is None:
     raise Exception('failed to find matching playlist item')
 playlisturl=urljoin(options.playlist,nextlist)
+
+if options.token is not None:
+    playlisturl=urljoin(playlisturl,options.token)
+
 playlist=curl_cat(playlisturl)
 segments=[]
 dsegments=[]
@@ -196,13 +206,18 @@ for line in re.split("[\r\n]+",playlist):
     if line=="": continue
     if re.match("#",line): continue
     file="%s/%s"%(options.scratch,os.path.basename(line))
+    url=urljoin(playlisturl,line)
+    if options.token is not None:
+        url=urljoin(url,options.token)
+
     segment={
-            'url':urljoin(playlisturl,line),
+            'url':url,
             'file':file
             }
     segments.append(segment)
     if os.path.isfile(file): continue
     dsegments.append(segment)
+
 curl_multi(dsegments)
 
 tsfile="%s/combined.ts"%options.scratch
@@ -225,7 +240,7 @@ try:
 except CalledProcessError as e:
     ident=e.output
     pass
-x=re.search("(\d+\.\d+) tbr",ident);
+x=re.search("(\d+(?:\.\d+)?) tbr",ident);
 fps=x.group(1)
 print "FPS %s"%fps
 
