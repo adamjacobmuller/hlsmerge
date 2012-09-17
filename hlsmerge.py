@@ -17,6 +17,7 @@ import re
 import pprint
 import os
 import subprocess
+import logging
 from subprocess import CalledProcessError
 from urlparse import urljoin,urlparse
 from optparse import OptionParser
@@ -141,6 +142,7 @@ parser.add_option("-b","--bandwidth",dest="bandwidth")
 parser.add_option("-s","--scratch",dest="scratch")
 parser.add_option("-t","--token",dest="token")
 parser.add_option("-c","--connections",dest="connections",default=5)
+parser.add_option("-l","--playlist-dump",dest="playlist_dump",default=False,action='store_true')
 
 (options, args) = parser.parse_args()
 
@@ -156,9 +158,12 @@ playlisturl=options.playlist
 if options.token is not None:
     playlisturl=urljoin(playlisturl,options.token)
 
-
 playlist=curl_cat(playlisturl)
 playlist=parse_extm3u(playlist)
+
+if options.playlist_dump is True:
+    pprint.pprint(playlist)
+    sys.exit(1)
 
 bestbw={}
 pids={}
@@ -176,7 +181,7 @@ for item in playlist:
 
 if len(pids)>1 and options.pid is None:
     pprint.pprint(pids)
-    raise Exception("multiple pids -- specify one with -p")
+    raise Exception("multiple pids -- specify one with -i")
 elif options.pid is not None:
     pid=options.pid
 else:
@@ -234,35 +239,22 @@ if not os.path.isfile(tsfile):
         segmenthandle.close()
     tshandle.close()
 
-# oh ffmpeg
+
 try:
-    ident=subprocess.check_output(["ffmpeg","-i",tsfile],stderr=subprocess.STDOUT)
+    #mkvmerge v5.8.0 ('No Sleep / Pillow') built on Sep 11 2012 21:46:00
+    mkvmerge = subprocess.check_output(["mkvmerge","-V"],stderr=subprocess.STDOUT)
+    mkversion = re.search("(mkvmerge v(\d+)\.(\d+).(\d+) [^\n]+)",mkvmerge)
+    if mkversion.group(2) < 5 or mkversion.group(3) < 8:
+        print "mkvmerge >= 5.8.0 required (you have %s)" % re.group(1)
+        sys.exit(1)
 except CalledProcessError as e:
-    ident=e.output
-    pass
-x=re.search("(\d+(?:\.\d+)?) tbr",ident);
-fps=x.group(1)
-print "FPS %s"%fps
+    print e.output
+    sys.exit(1)
 
-print "extracting audio"
-audio="%s/audio.aac"%options.scratch
-if not os.path.isfile(audio):
-    try:
-        eaudio=subprocess.check_output(["ffmpeg","-y","-i",tsfile,"-acodec","copy",audio],stderr=subprocess.STDOUT)
-    except CalledProcessError as e:
-        print e.output
-
-print "extracting video"
-video="%s/video.h264"%options.scratch
-if not os.path.isfile(video):
-    try:
-        evideo=subprocess.check_output(["ffmpeg","-y","-i",tsfile,"-vcodec","copy",video],stderr=subprocess.STDOUT)
-    except CalledProcessError as e:
-        print e.output
-
-mkv="%s/final.mkv"%options.scratch
+mkv="%s/final.mkv" % options.scratch
 if not os.path.isfile(mkv):
     try:
-        evideo=subprocess.check_output(["mkvmerge","-o",mkv,"--default-duration","0:%sfps"%fps,'-A',video,'-D',audio],stderr=subprocess.STDOUT)
+        print "remuxing from MPEG-TS -> MKV"
+        evideo=subprocess.check_output(["mkvmerge","-o",mkv,tsfile],stderr=subprocess.STDOUT)
     except CalledProcessError as e:
         print e.output
