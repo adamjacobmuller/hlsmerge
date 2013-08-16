@@ -19,10 +19,11 @@ import os
 import subprocess
 import logging
 from subprocess import CalledProcessError
-from urlparse import urljoin,urlparse
+from urlparse import urljoin, urlparse
 from optparse import OptionParser
 
-def curl_multi(urls,max=5):
+
+def curl_multi(urls, max=5):
     num_urls = len(urls)
     num_conn = min(max, num_urls)
     m = pycurl.CurlMulti()
