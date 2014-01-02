@@ -103,47 +103,55 @@ def curl_cat(url):
     b.close()
     return contents
 
+
 def parse_extm3u(string):
-    lines=[]
-    for line in re.split("[\r\n]+",string):
-        if line=="": continue
+    lines = []
+    for line in re.split("[\r\n]+", string):
+        if line == "": continue
         lines.append(line)
-    
-    if lines[0]!="#EXTM3U":
+
+    if lines[0] != "#EXTM3U":
+        pprint.pprint(lines)
         raise Exception("doesn't look like an m3u playlist?")
     else:
         del lines[0]
-    
-    items=[]
-    for i in range(0,len(lines)/2):
-        item={}
-        x=re.search("PROGRAM-ID=(\d+)",lines[i*2])
+
+    items = []
+    i = 0
+    while i < len(lines):
+        x = re.search("^#EXT-X-STREAM-INF:", lines[i])
+        if not x:
+            i += 1
+            continue
+        item = {}
+        x = re.search("PROGRAM-ID=(\d+)", lines[i])
         if x:
-            item['pid']=x.group(1)
+            item['pid'] = x.group(1)
         else:
-            item['pid']=1
-        
-        x=re.search("BANDWIDTH=(\d+)",lines[i*2])
+            item['pid'] = 1
+
+        x = re.search("BANDWIDTH=(\d+)", lines[i])
         if x:
-            item['bandwidth']=int(x.group(1))
+            item['bandwidth'] = int(x.group(1))
         else:
-            item['bandwidth']=1
-        
-        item['playlist']=lines[(i*2)+1]
+            item['bandwidth'] = 1
+
+        item['playlist'] = lines[i + 1]
         items.append(item)
+        i += 2
     return items
 
 
 #print curl_cat("http://www.whatismyip.org")
 
 parser = OptionParser()
-parser.add_option("-p","--playlist",dest="playlist")
-parser.add_option("-i","--program-id",dest="pid")
-parser.add_option("-b","--bandwidth",dest="bandwidth")
-parser.add_option("-s","--scratch",dest="scratch")
-parser.add_option("-t","--token",dest="token")
-parser.add_option("-c","--connections",dest="connections",default=5)
-parser.add_option("-l","--playlist-dump",dest="playlist_dump",default=False,action='store_true')
+parser.add_option("-p", "--playlist", dest = "playlist")
+parser.add_option("-i", "--program-id", dest = "pid")
+parser.add_option("-b", "--bandwidth", dest = "bandwidth")
+parser.add_option("-s", "--scratch", dest = "scratch")
+parser.add_option("-t", "--token", dest = "token")
+parser.add_option("-c", "--connections", dest = "connections", default = 5)
+parser.add_option("-l", "--playlist-dump", dest = "playlist_dump", default = False, action = 'store_true')
 
 (options, args) = parser.parse_args()
 
@@ -157,7 +165,9 @@ if options.playlist is None:
 
 playlisturl=options.playlist
 if options.token is not None:
+    print playlisturl
     playlisturl=urljoin(playlisturl,options.token)
+    print playlisturl
 
 playlist=curl_cat(playlisturl)
 playlist=parse_extm3u(playlist)
