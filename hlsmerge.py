@@ -11,6 +11,8 @@ try:
 except ImportError:
     from StringIO import StringIO
 
+import binascii
+import hashlib
 import sys
 import pycurl
 import re
@@ -18,9 +20,11 @@ import pprint
 import os
 import subprocess
 import logging
+import json
 from subprocess import CalledProcessError
 from urlparse import urljoin, urlparse
 from optparse import OptionParser
+from sh import openssl
 
 
 def curl_multi(urls, max=5):
@@ -217,10 +221,25 @@ if options.token is not None:
 playlist = curl_cat(playlisturl)
 segments = []
 dsegments = []
+key = None
+kreq = []
 for line in re.split("[\r\n]+", playlist):
     if line == "":
         continue
-    if re.match("#", line):
+    if line[0] == "#":
+        if line[0:len("#EXT-X-KEY:")] == "#EXT-X-KEY:":
+            rer = re.match('^#EXT-X-KEY:METHOD=AES-128,URI="([^"]+)"$', line)
+            if rer is None:
+                print '-- unable to (very naively) parse EXT-X-KEY line: %s' % line
+            else:
+                key_url = rer.group(1)
+                key_hash = hashlib.md5(key_url).hexdigest()
+                key_file = "%s/%s.aes" % (options.scratch, key_hash)
+                key = dict(
+                    url=key_url,
+                    hash=key_hash,
+                    file=key_file
+                )
         continue
     file = "%s/%s" % (options.scratch, os.path.basename(line))
     url = urljoin(playlisturl, line)
@@ -229,14 +248,39 @@ for line in re.split("[\r\n]+", playlist):
 
     segment = {
         'url': url,
-        'file': file
+        'file': file,
+        'key': key
     }
     segments.append(segment)
+    if key is not None and os.path.isfile(key['file']) is False and key['hash'] not in kreq:
+        kreq.append(key['hash'])
+        dsegments.append(dict(
+            url=key['url'],
+            file=key['file']
+        ))
     if os.path.isfile(file):
         continue
+
     dsegments.append(segment)
 
 curl_multi(dsegments)
+
+
+for segment in segments:
+    if segment['key'] is None:
+        continue
+
+    segment['encrypted'] = segment['file']
+    segment['decrypted'] = '%s.decrypted' % segment['file']
+    if os.path.exists(segment['decrypted']):
+        segment['file'] = segment['decrypted']
+        continue
+    else:
+        print "decrypting %s" % segment['file']
+        key = binascii.hexlify(open(segment['key']['file']).read())
+        #openssl aes-128-cbc -d -K $(hexdump -e '/1 "%02X"' key) -iv 0 -nosalt -in $i -out 12215-dec/$b
+        openssl("aes-128-cbc", "-d", "-K", key, "-iv", 0, "-nosalt", "-in", segment['file'], "-out", dfile)
+        segment['file'] = segment['decrypted']
 
 tsfile = "%s/combined.ts" % options.scratch
 if not os.path.isfile(tsfile):
