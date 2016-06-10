@@ -279,7 +279,7 @@ for segment in segments:
         print "decrypting %s" % segment['file']
         key = binascii.hexlify(open(segment['key']['file']).read())
         #openssl aes-128-cbc -d -K $(hexdump -e '/1 "%02X"' key) -iv 0 -nosalt -in $i -out 12215-dec/$b
-        openssl("aes-128-cbc", "-d", "-K", key, "-iv", 0, "-nosalt", "-in", segment['file'], "-out", dfile)
+        openssl("aes-128-cbc", "-d", "-K", key, "-iv", 0, "-nosalt", "-in", segment['encrypted'], "-out", segment['decrypted'])
         segment['file'] = segment['decrypted']
 
 tsfile = "%s/combined.ts" % options.scratch
