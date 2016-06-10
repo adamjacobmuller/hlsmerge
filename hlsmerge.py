@@ -79,8 +79,7 @@ def curl_multi(urls, max=5):
         # (display a progress bar, etc.).
         # We just call select() to sleep until some more data is available.
         m.select(1.0)
-    
-    
+
     # Cleanup
     for c in m.handles:
         if c.fp is not None:
@@ -88,18 +87,17 @@ def curl_multi(urls, max=5):
             c.fp = None
         c.close()
     m.close()
-    
 
 
 def curl_cat(url):
     b = StringIO()
     c = pycurl.Curl()
-    c.fp=b
-    c.setopt(pycurl.URL,url)
-    c.setopt(pycurl.WRITEFUNCTION,b.write)
+    c.fp = b
+    c.setopt(pycurl.URL, url)
+    c.setopt(pycurl.WRITEFUNCTION, b.write)
     c.perform()
     b.seek(0)
-    contents=b.getvalue()
+    contents = b.getvalue()
     b.close()
     return contents
 
@@ -107,7 +105,8 @@ def curl_cat(url):
 def parse_extm3u(string):
     lines = []
     for line in re.split("[\r\n]+", string):
-        if line == "": continue
+        if line == "":
+            continue
         lines.append(line)
 
     if lines[0] != "#EXTM3U":
@@ -145,13 +144,13 @@ def parse_extm3u(string):
 #print curl_cat("http://www.whatismyip.org")
 
 parser = OptionParser()
-parser.add_option("-p", "--playlist", dest = "playlist")
-parser.add_option("-i", "--program-id", dest = "pid")
-parser.add_option("-b", "--bandwidth", dest = "bandwidth")
-parser.add_option("-s", "--scratch", dest = "scratch")
-parser.add_option("-t", "--token", dest = "token")
-parser.add_option("-c", "--connections", dest = "connections", default = 5)
-parser.add_option("-l", "--playlist-dump", dest = "playlist_dump", default = False, action = 'store_true')
+parser.add_option("-p", "--playlist", dest="playlist")
+parser.add_option("-i", "--program-id", dest="pid")
+parser.add_option("-b", "--bandwidth", dest="bandwidth")
+parser.add_option("-s", "--scratch", dest="scratch")
+parser.add_option("-t", "--token", dest="token")
+parser.add_option("-c", "--connections", dest="connections", default=5)
+parser.add_option("-l", "--playlist-dump", dest="playlist_dump", default=False, action='store_true')
 
 (options, args) = parser.parse_args()
 
@@ -163,89 +162,93 @@ elif not os.path.isdir(options.scratch):
 if options.playlist is None:
     raise Exception("playlist is a required option")
 
-playlisturl=options.playlist
+playlisturl = options.playlist
 if options.token is not None:
     print playlisturl
-    playlisturl=urljoin(playlisturl,options.token)
+    playlisturl = urljoin(playlisturl, options.token)
     print playlisturl
 
-playlist=curl_cat(playlisturl)
-playlist=parse_extm3u(playlist)
+playlist = curl_cat(playlisturl)
+playlist = parse_extm3u(playlist)
 
 if options.playlist_dump is True:
     pprint.pprint(playlist)
     sys.exit(1)
 
-bestbw={}
-pids={}
+bestbw = {}
+pids = {}
 for item in playlist:
     try:
-        if item['bandwidth']>bestbw[item['pid']]:
-            bestbw[item['pid']]=item['bandwidth']
+        if item['bandwidth'] > bestbw[item['pid']]:
+            bestbw[item['pid']] = item['bandwidth']
     except KeyError:
-        bestbw[item['pid']]=item['bandwidth']
+        bestbw[item['pid']] = item['bandwidth']
     try:
-        pids[item['pid']]+=1
+        pids[item['pid']] += 1
     except KeyError:
-        pids[item['pid']]=1
+        pids[item['pid']] = 1
 
 
-if len(pids)>1 and options.pid is None:
+if len(pids) > 1 and options.pid is None:
     pprint.pprint(pids)
     raise Exception("multiple pids -- specify one with -i")
 elif options.pid is not None:
-    pid=options.pid
+    pid = options.pid
 else:
-    pid=pids.keys()[0]
+    pid = pids.keys()[0]
 
 if options.bandwidth is None:
-    bandwidth=bestbw[pid]
+    bandwidth = bestbw[pid]
 else:
-    bandwidth=int(options.bandwidth)
+    bandwidth = int(options.bandwidth)
 
-nextlist=None
+nextlist = None
 for item in playlist:
-    if item['bandwidth']==bandwidth and item['pid']==pid:
-        nextlist=item['playlist']
+    if item['bandwidth'] == bandwidth and item['pid'] == pid:
+        nextlist = item['playlist']
 
 if nextlist is None:
     raise Exception('failed to find matching playlist item')
-playlisturl=urljoin(options.playlist,nextlist)
+playlisturl = urljoin(options.playlist, nextlist)
 
 if options.token is not None:
-    playlisturl=urljoin(playlisturl,options.token)
+    playlisturl = urljoin(playlisturl, options.token)
 
-playlist=curl_cat(playlisturl)
-segments=[]
-dsegments=[]
-for line in re.split("[\r\n]+",playlist):
-    if line=="": continue
-    if re.match("#",line): continue
-    file="%s/%s"%(options.scratch,os.path.basename(line))
-    url=urljoin(playlisturl,line)
+playlist = curl_cat(playlisturl)
+segments = []
+dsegments = []
+for line in re.split("[\r\n]+", playlist):
+    if line == "":
+        continue
+    if re.match("#", line):
+        continue
+    file = "%s/%s" % (options.scratch, os.path.basename(line))
+    url = urljoin(playlisturl, line)
     if options.token is not None:
-        url=urljoin(url,options.token)
+        url = urljoin(url, options.token)
 
-    segment={
-            'url':url,
-            'file':file
-            }
+    segment = {
+        'url': url,
+        'file': file
+    }
     segments.append(segment)
-    if os.path.isfile(file): continue
+    if os.path.isfile(file):
+        continue
     dsegments.append(segment)
 
 curl_multi(dsegments)
 
-tsfile="%s/combined.ts"%options.scratch
+tsfile = "%s/combined.ts" % options.scratch
 if not os.path.isfile(tsfile):
-    tshandle=open(tsfile,"w",-1)
+    tshandle = open(tsfile, "w", -1)
     tshandle.seek(0)
     for segment in segments:
         print segment['file']
-        segmenthandle=open(segment['file'],"r",-1)
+        segmenthandle = open(segment['file'], "r", -1)
         while 1:
-            buffer=segmenthandle.read()
-            if len(buffer)==0: break
+            buffer = segmenthandle.read()
+            if len(buffer) == 0:
+                break
             tshandle.write(buffer)
         segmenthandle.close()
     tshandle.close()
@@ -253,8 +256,8 @@ if not os.path.isfile(tsfile):
 
 try:
     #mkvmerge v5.8.0 ('No Sleep / Pillow') built on Sep 11 2012 21:46:00
-    mkvmerge = subprocess.check_output(["mkvmerge","-V"],stderr=subprocess.STDOUT)
-    mkversion = re.search("(mkvmerge v(\d+)\.(\d+).(\d+) [^\n]+)",mkvmerge)
+    mkvmerge = subprocess.check_output(["mkvmerge", "-V"], stderr=subprocess.STDOUT)
+    mkversion = re.search("(mkvmerge v(\d+)\.(\d+).(\d+) [^\n]+)", mkvmerge)
     if mkversion.group(2) < 5 or mkversion.group(3) < 8:
         print "mkvmerge >= 5.8.0 required (you have %s)" % re.group(1)
         sys.exit(1)
@@ -262,10 +265,10 @@ except CalledProcessError as e:
     print e.output
     sys.exit(1)
 
-mkv="%s/final.mkv" % options.scratch
+mkv = "%s/final.mkv" % options.scratch
 if not os.path.isfile(mkv):
     try:
         print "remuxing from MPEG-TS -> MKV"
-        evideo=subprocess.check_output(["mkvmerge","-o",mkv,tsfile],stderr=subprocess.STDOUT)
+        evideo = subprocess.check_output(["mkvmerge", "-o", mkv, tsfile], stderr=subprocess.STDOUT)
     except CalledProcessError as e:
         print e.output
